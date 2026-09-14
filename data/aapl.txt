@@ -1,0 +1,65 @@
+Description
+Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide. The company offers iPhone, a line of smartphones; Mac, a line of personal computers; iPad, a line of multi-purpose tablets; and wearables, home, and accessories comprising AirPods, Apple Vision Pro, Apple TV, Apple Watch, Beats products, and HomePod, as well as Apple branded and third-party accessories. It also provides AppleCare support and cloud services; and operates various platforms, including the App Store that allows customers to discover and download applications and digital content, such as books, music, video, games, and podcasts, as well as advertising services include third-party licensing arrangements and its own advertising platforms. In addition, the company offers various subscription-based services, such as Apple Arcade, a game subscription service; Apple Fitness+, a personalized fitness service; Apple Music, which offers users a curated listening experience with on-demand radio stations; Apple News+, a subscription news and magazine service; Apple TV, which offers original content and live sports; Apple Card, a co-branded credit card; and Apple Pay, a cashless payment service, as well as licenses its intellectual property. The company serves consumers, and small and mid-sized businesses; and the education, enterprise, and government markets. It distributes third-party applications for its products through the App Store. The company also sells its products through its retail and online stores, and direct sales force; and third-party cellular network carriers and resellers. The company was formerly known as Apple Computer, Inc. and changed its name to Apple Inc. in January 2007. Apple Inc. was founded in 1976 and is headquartered in Cupertino, California.
+
+Financial Highlights
+Fiscal Year
+Fiscal Year Ends	9/27/2025
+Most Recent Quarter (mrq)	6/27/2026
+Profitability
+Profit Margin	27.62%
+Operating Margin (ttm)	32.62%
+Management Effectiveness
+Return on Assets (ttm)	27.08%
+Return on Equity (ttm)	148.75%
+Income Statement
+Revenue (ttm)	466.82B
+Revenue Per Share (ttm)	31.71
+Quarterly Revenue Growth (yoy)	16.40%
+Gross Profit (ttm)	227.12B
+EBITDA	167.96B
+Net Income Avi to Common (ttm)	128.93B
+Diluted EPS (ttm)	8.71
+Quarterly Earnings Growth (yoy)	27.10%
+Balance Sheet
+Total Cash (mrq)	62.4B
+Total Cash Per Share (mrq)	4.28
+Total Debt (mrq)	84.34B
+Total Debt/Equity (mrq)	78.44%
+Current Ratio (mrq)	1.00
+Book Value Per Share (mrq)	7.36
+Cash Flow Statement
+Operating Cash Flow (ttm)	146.72B
+Levered Free Cash Flow (ttm)	107.72B
+Trading Information
+Stock Price History
+Beta (5Y Monthly)	1.09
+52 Week Change 3	40.38%
+S&P 500 52-Week Change 3	15.75%
+52 Week High 3	344.57
+52 Week Low 3	235.03
+50-Day Moving Average 3	317.97
+200-Day Moving Average 3	284.95
+Share Statistics
+Avg Vol (3 month) 3	54.06M
+Avg Vol (10 day) 3	46.55M
+Shares Outstanding 5	14.59B
+Implied Shares Outstanding 6	14.59B
+Float 8	14.57B
+% Held by Insiders 1	1.65%
+% Held by Institutions 1	66.34%
+Shares Short (8/31/2026) 4	139.75M
+Short Ratio (8/31/2026) 4	2.97
+Short % of Float (8/31/2026) 4	0.96%
+Short % of Shares Outstanding (8/31/2026) 4	0.96%
+Shares Short (prior month 7/31/2026) 4	141.61M
+Dividends & Splits
+Forward Annual Dividend Rate 4	1.08
+Forward Annual Dividend Yield 4	0.33%
+Trailing Annual Dividend Rate 3	1.05
+Trailing Annual Dividend Yield 3	0.32%
+5 Year Average Dividend Yield 4	0.50
+Payout Ratio 4	12.04%
+Dividend Date 3	8/13/2026
+Ex-Dividend Date 4	8/10/2026
+Last Split Factor 2	4:1
+Last Split Date 3	8/31/2020
