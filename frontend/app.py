@@ -1,6 +1,7 @@
 import os
 import requests
 import streamlit as st
+from yfinance import data
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
@@ -84,3 +85,28 @@ tab_portfolio, tab_rag, tab_documents = st.tabs([
     "🤖 AI Financial Assistant (RAG)", 
     "📂 Document Ingestion"
 ])    
+
+ticker = st.text_input("Enter Stock Ticker:", "AAPL").upper().strip()
+
+if st.button("Fetch Data"):
+    try:
+        response = requests.get(f"http://localhost:8000/stocks/{ticker}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            st.metric(label=data["company_name"], value=f"${data['current_price']:,.2f}")
+            st.metric(label="Previous Closing Price from Previous Trading Day", value=f"${data['previous_close']:,.2f}")
+            st.metric(label="Company Market Cap", value=f"${data['market_cap']:,.2f}")
+            st.metric(label="Year-to Day High", value=f"${data['year_to_date_high']:,.2f}")
+            st.metric(label="Year-to Day Low", value=f"${data['year_to_date_low']:,.2f}")
+            st.metric(label="Trailing Price to Expense Ratio", value=f"{data['trailing_pe']:,.2f}")
+            st.metric(label="Forward Price to Expense Ratio", value=f"{data['forward_pe']:,.2f}")
+
+            st.write(data["summary"])
+        else:
+            # Display the exact exception detail returned by FastAPI
+            error_msg = response.json().get("detail", "Unknown server error")
+            st.error(f"Backend Error ({response.status_code}): {error_msg}")
+
+    except requests.exceptions.ConnectionError:
+        st.error("Could not connect to FastAPI backend at http://localhost:8000.")

@@ -6,13 +6,10 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.db.models import Base, engine, get_db, User, Portfolio
-from app.schemas.schemas import UserCreate, UserResponse, Token, PortfolioCreate, PortfolioResponse
+from app.schemas.schemas import UserCreate, UserResponse, Token, PortfolioCreate, PortfolioResponse, StockDataResponse
 from app.core.security import get_password_hash, verify_password, create_access_token, get_current_user
+from app.services.yahoo_services import get_stock_data
 
-# =====================================================================
-# CONFIGURATION LOADING
-# =====================================================================
-# Locate config.toml relative to backend directory structure
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.toml")
 
@@ -84,7 +81,14 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
-
+# Fetching Yahoo Finance API Service
+@app.get("/stocks/{ticker}", response_model=StockDataResponse,tags=["Stocks"])
+def fetch_stock_info(ticker: str):
+    try:
+        data = get_stock_data(ticker)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch ticker data: {str(e)}")
 # =====================================================================
 # PORTFOLIO ENDPOINTS (PROTECTED)
 # =====================================================================

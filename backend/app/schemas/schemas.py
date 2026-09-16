@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import tomllib
 from datetime import datetime
+from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 # Load TOML configuration table
@@ -54,3 +55,16 @@ class PortfolioResponse(PortfolioCreate):
 
     class Config:
         from_attributes = True    
+
+class StockDataResponse(BaseModel):
+    ticker: str
+    company_name: str
+    current_price: float
+    currency: str = "USD"
+    previous_close: Optional[float] = None
+    market_cap: Optional[int] = None
+    year_to_date_high: Optional[float] = None
+    year_to_date_low: Optional[float] = None
+    trailing_pe: Optional[float] = None
+    forward_pe: Optional[float] = None
+    summary: str = "No summary available."
