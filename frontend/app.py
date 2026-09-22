@@ -259,16 +259,11 @@ def format_large_number(num):
 with tab_stockresearch:
     st.header("Stock Research Terminal")
     st.caption("Real-time financial metrics and company overview powered by FastAPI & Yahoo Finance")
-
-    if "selected_ticker" not in st.session_state:
-        st.session_state.selected_ticker = "AAPL"
-
+   
     # Search Bar & Action Controls
     col_search, col_btn = st.columns([4, 1], vertical_alignment="bottom")
     with col_search:
-        ticker = st.text_input("Enter Stock Ticker:", "AAPL", help="e.g. AAPL, NVDA, MSFT").upper().strip()
-
-    active_ticker = st.session_state.selected_ticker    
+        ticker = st.text_input("Enter Stock Ticker:", help="e.g. AAPL, NVDA, MSFT").upper().strip()   
 
     if ticker:
         try:

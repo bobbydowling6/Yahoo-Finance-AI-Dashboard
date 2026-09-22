@@ -1,3 +1,4 @@
+from builtins import Exception
 import os
 import tomllib
 from fastapi import FastAPI, Depends, HTTPException, status
