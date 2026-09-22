@@ -2,6 +2,9 @@ import os
 import requests
 import streamlit as st
 from yfinance import data
+import plotly.express as px
+import pandas as pd
+import yfinance
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
@@ -89,86 +92,361 @@ tab_portfolio, tab_stockresearch, tab_rag, tab_documents = st.tabs([
 
 with tab_portfolio:
     st.header("My Investment Portfolio")
+    st.caption("Manage your holdings and monitor real-time performance")
 
-    col1, col2 = st.columns([1, 2])
-
-    with col1:
-        st.subheader("Add Stock Holding")
-        with st.form("add_stock_form", clear_on_submit=True):
-            ticker_input = st.text_input("Ticker Symbol (e.g., AAPL, NVDA)")
-            shares_input = st.number_input("Shares Owned", min_value=0.01, step=1.0)
-            price_input = st.number_input("Purchase Price ($)", min_value=0.01, step=1.0)
-            submitted = st.form_submit_button("Add Holding")
-
-            if submitted:
-                payload = {
-                    "ticker": ticker_input.strip().upper(),
-                    "shares": shares_input,
-                    "buy_price": price_input,
-                }
-                res = requests.post(
-                    f"{BACKEND_URL}/portfolio/",
-                    json=payload,
-                    headers=get_auth_headers(),
-                )
-                if res.status_code == 201:
-                    st.success(f"Added {ticker_input.upper()} to portfolio!")
-                    st.rerun()
-                else:
-                    st.error(f"Error adding stock: {res.text}")
-    with col2:
-        st.subheader("Current Holdings")
+    portfolio_items = []
+    fetch_error = False
+    
+    try:
         res = requests.get(f"{BACKEND_URL}/portfolio/", headers=get_auth_headers())
-
         if res.status_code == 200:
             portfolio_items = res.json()
+        else:
+            fetch_error = True
+    except requests.exceptions.ConnectionError:
+        fetch_error = True
+
+    if fetch_error:
+        st.error("Could not load portfolio holdings from the backend.")
+    else:
+        # --- TOP KPI SUMMARY ROW ---
+        if portfolio_items:
+            df_portfolio = pd.DataFrame(portfolio_items)
+            
+            # Calculate metrics (assuming current_price is returned by backend or fall back to buy_price)
+            # If backend provides real-time price: item.get('current_price', item['buy_price'])
+            df_portfolio['total_cost'] = df_portfolio['shares'] * df_portfolio['buy_price']
+            
+            # For demonstration, calculating current value from current_price if provided, else buy_price
+            df_portfolio['current_price'] = df_portfolio.get('current_price', df_portfolio['buy_price'])
+            df_portfolio['market_value'] = df_portfolio['shares'] * df_portfolio['current_price']
+            df_portfolio['unrealized_gain'] = df_portfolio['market_value'] - df_portfolio['total_cost']
+
+            total_portfolio_val = df_portfolio['market_value'].sum()
+            total_cost_basis = df_portfolio['total_cost'].sum()
+            total_gain_loss = df_portfolio['unrealized_gain'].sum()
+            pct_gain_loss = (total_gain_loss / total_cost_basis * 100) if total_cost_basis > 0 else 0
+
+            # KPI Grid
+            kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+            kpi1.metric("Total Portfolio Value", f"${total_portfolio_val:,.2f}")
+            kpi2.metric("Total Cost Basis", f"${total_cost_basis:,.2f}")
+            kpi3.metric(
+                "Total Gain / Loss", 
+                f"${total_gain_loss:+,.2f}", 
+                delta=f"{pct_gain_loss:+.2f}%"
+            )
+            kpi4.metric("Total Positions", len(df_portfolio))
+
+            st.divider()
+
+        # --- TWO COLUMN MAIN WORKSPACE ---
+        col_form, col_holdings = st.columns([1, 2], gap="large")
+
+        # LEFT COLUMN: Add Holding Form
+        with col_form:
+            with st.container(border=True):
+                st.subheader("➕ Add Position")
+                
+                with st.form("add_stock_form", clear_on_submit=True):
+                    ticker_input = st.text_input("Ticker Symbol", placeholder="e.g. AAPL, NVDA").upper().strip()
+                    
+                    c_shares, c_price = st.columns(2)
+                    with c_shares:
+                        shares_input = st.number_input("Shares Owned", min_value=0.01, step=1.0, value=1.0)
+                    with c_price:
+                        price_input = st.number_input("Avg Buy Price ($)", min_value=0.01, step=1.0, value=100.0)
+                        
+                    submitted = st.form_submit_button("Add to Portfolio", type="primary", width="stretch")
+
+                    if submitted:
+                        if not ticker_input:
+                            st.warning("Please enter a valid ticker symbol.")
+                        else:
+                            payload = {
+                                "ticker": ticker_input,
+                                "shares": shares_input,
+                                "buy_price": price_input,
+                            }
+                            res = requests.post(
+                                f"{BACKEND_URL}/portfolio/",
+                                json=payload,
+                                headers=get_auth_headers(),
+                            )
+                            if res.status_code == 201:
+                                st.toast(f"Added {ticker_input} to portfolio!", icon="✅")
+                                st.rerun()
+                            else:
+                                st.error(f"Error adding stock: {res.text}")
+
+        # RIGHT COLUMN: Holdings Table & Visualization
+        with col_holdings:
+            st.subheader("📊 Current Positions")
+            
             if not portfolio_items:
                 st.info("No holdings found. Add your first stock holding using the form on the left!")
             else:
-                for item in portfolio_items:
-                    with st.container(border=True):
-                        c1, c2, c3, c4 = st.columns([2, 2, 2, 1])
-                        c1.markdown(f"**{item['ticker']}**")
-                        c2.write(f"Shares: {item['shares']}")
-                        c3.write(f"Buy Price: ${item['buy_price']:.2f}")
+                # Tabbed view for Data Table vs Allocation Chart
+                view_table, view_chart = st.tabs(["📋 Positions Table", "🍩 Asset Allocation"])
 
-                        if c4.button("🗑️", key=f"del_{item['id']}"):
-                            del_res = requests.delete(
-                                f"{BACKEND_URL}/portfolio/{item['id']}",
-                                headers=get_auth_headers(),
+                with view_table:
+                    # Cleaned DataFrame for presentation
+                    display_df = df_portfolio[['id', 'ticker', 'shares', 'buy_price', 'market_value']].copy()
+                    display_df.columns = ['ID', 'Ticker', 'Shares', 'Avg Buy Price ($)', 'Market Value ($)']
+
+                    st.dataframe(
+                        display_df,
+                        column_config={
+                            "ID": None, # Hide internal ID column
+                            "Avg Buy Price ($)": st.column_config.NumberColumn(format="$%.2f"),
+                            "Market Value ($)": st.column_config.NumberColumn(format="$%.2f"),
+                            "Shares": st.column_config.NumberColumn(format="%.2f"),
+                        },
+                        hide_index=True,
+                        width="stretch"
+                    )
+
+                    # Quick Delete Expander
+                    with st.expander("🗑️ Manage / Delete Holdings"):
+                        del_col1, del_col2 = st.columns([3, 1], vertical_alignment="bottom")
+                        with del_col1:
+                            target_to_del = st.selectbox(
+                                "Select holding to remove:", 
+                                options=portfolio_items, 
+                                format_func=lambda x: f"{x['ticker']} — {x['shares']} shares @ ${x['buy_price']:.2f}"
                             )
-                            if del_res.status_code == 204:
-                                st.success(f"Removed {item['ticker']}")
-                                st.rerun()
-                            else:
-                                st.error("Failed to delete holding.")
-        else:
-            st.error("Could not load portfolio holdings.")                
+                        with del_col2:
+                            if st.button("Delete", type="secondary", width="stretch"):
+                                if target_to_del:
+                                    del_res = requests.delete(
+                                        f"{BACKEND_URL}/portfolio/{target_to_del['id']}",
+                                        headers=get_auth_headers(),
+                                    )
+                                    if del_res.status_code in (200, 204):
+                                        st.toast(f"Removed {target_to_del['ticker']}", icon="🗑️")
+                                        st.rerun()
+                                    else:
+                                        st.error("Failed to delete holding.")
+
+                with view_chart:
+                    # Donut Chart for Portfolio Breakdown
+                    fig_donut = px.pie(
+                        df_portfolio, 
+                        names='ticker', 
+                        values='market_value', 
+                        hole=0.5,
+                        title="Portfolio Weight Distribution"
+                    )
+                    fig_donut.update_layout(
+                        template="plotly_dark", 
+                        paper_bgcolor="rgba(0,0,0,0)", 
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        margin=dict(l=20, r=20, t=40, b=20)
+                    )
+                    st.plotly_chart(fig_donut, width="stretch")                
+
+def format_large_number(num):
+    if num is None:
+        return "N/A"
+    if num >= 1e12:
+        return f"${num / 1e12:,.2f}T"
+    elif num >= 1e9:
+        return f"${num / 1e9:,.2f}B"
+    elif num >= 1e6:
+        return f"${num / 1e6:,.2f}M"
+    return f"${num:,.2f}"
 
 with tab_stockresearch:
-    st.header("Stock Research")
+    st.header("Stock Research Terminal")
+    st.caption("Real-time financial metrics and company overview powered by FastAPI & Yahoo Finance")
 
-    ticker = st.text_input("Enter Stock Ticker:", "AAPL").upper().strip()
+    if "selected_ticker" not in st.session_state:
+        st.session_state.selected_ticker = "AAPL"
 
-    if st.button("Fetch Data"):
+    # Search Bar & Action Controls
+    col_search, col_btn = st.columns([4, 1], vertical_alignment="bottom")
+    with col_search:
+        ticker = st.text_input("Enter Stock Ticker:", "AAPL", help="e.g. AAPL, NVDA, MSFT").upper().strip()
+    with col_btn:
+        fetch_clicked = st.button("Fetch Data", type="primary", width="stretch")
+        st.session_state.selected_ticker = ticker_input
+
+    active_ticker = st.session_state.selected_ticker    
+
+    if fetch_clicked:
         try:
-            response = requests.get(f"http://localhost:8000/stocks/{ticker}")
-        
+            with st.spinner(f"Fetching market data for {ticker}..."):
+                response = requests.get(f"http://localhost:8000/stocks/{ticker}")
+            
             if response.status_code == 200:
                 data = response.json()
-                st.metric(label=data["company_name"], value=f"${data['current_price']:,.2f}")
-                st.metric(label="Previous Closing Price from Previous Trading Day", value=f"${data['previous_close']:,.2f}")
-                st.metric(label="Company Market Cap", value=f"${data['market_cap']:,.2f}")
-                st.metric(label="Year-to Day High", value=f"${data['year_to_date_high']:,.2f}")
-                st.metric(label="Year-to Day Low", value=f"${data['year_to_date_low']:,.2f}")
-                st.metric(label="Trailing Price to Expense Ratio", value=f"{data['trailing_pe']:,.2f}")
-                st.metric(label="Forward Price to Expense Ratio", value=f"{data['forward_pe']:,.2f}")
+                
+                # --- HEADER & PRICE HIGHLIGHT ---
+                curr_price = data.get('current_price', 0)
+                prev_close = data.get('previous_close', 0)
+                price_change = curr_price - prev_close if prev_close else 0
+                pct_change = (price_change / prev_close * 100) if prev_close else 0
 
-                st.write(data["summary"])
+                st.subheader(f"{data.get('company_name', ticker)} ({ticker})")
+                
+                # Main Hero Metric
+                st.metric(
+                    label="Current Price",
+                    value=f"${curr_price:,.2f}",
+                    delta=f"${price_change:+,.2f} ({pct_change:+.2f}%)"
+                )
+
+                st.divider()
+
+                # --- HISTORICAL LINE GRAPH SECTION ---
+                
+                st.markdown("##### 📈 Historical Price Chart")
+
+                # Timeframe Selector
+                selected_period = st.pills(
+                    "Select Range:",
+                    options=["1mo", "3mo", "6mo", "ytd", "1y", "5y", "max"],
+                    default="ytd",
+                    key="chart_period"
+                )
+
+                # Fetch Historical Data via yfinance
+                try:
+                    stock_obj = yfinance.Ticker(ticker)
+                    hist_df = stock_obj.history(period=selected_period)
+
+                    if not hist_df.empty:
+                        # Reset index to get Date as a column
+                        hist_df = hist_df.reset_index()
+
+                        # Determine overall period trend for line color (Green if up, Red if down)
+                        first_close = hist_df['Close'].iloc[0]
+                        last_close = hist_df['Close'].iloc[-1]
+                        line_color = "#00C805" if last_close >= first_close else "#FF5000"
+
+                        # Create Plotly Line Chart
+                        fig = px.line(
+                            hist_df,
+                            x="Date",
+                            y="Close",
+                            title=f"{ticker} Price Movement ({selected_period.upper()})",
+                            labels={"Date": "Date", "Close": "Price ($)"}
+                        )
+
+                        # Apply sleek dark styling
+                        fig.update_traces(line_color=line_color, line_width=2)
+                        fig.update_layout(
+                            template="plotly_dark",
+                            height=400,
+                            margin=dict(l=20, r=20, t=40, b=20),
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(0,0,0,0)",
+                            hovermode="x unified",
+                            xaxis_title=None,
+                            yaxis_title="Stock Price ($)"
+                        )
+
+                        st.plotly_chart(fig, width="stretch")
+                    else:
+                        st.warning("No historical price data returned for this ticker.")
+                
+                except Exception as chart_err:
+                    st.error(f"Could not load historical price chart: {chart_err}")
+
+                st.divider()
+
+                # --- METRICS GRID LAYOUT ---
+                st.markdown("##### 📊 Key Fundamentals & Valuation")
+                
+                # Row 1: Core Fundamentals
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Market Cap", format_large_number(data.get("market_cap")))
+                m2.metric("Previous Close", f"${prev_close:,.2f}")
+                m3.metric("52-Wk / YTD High", f"${data.get('year_to_date_high', 0):,.2f}")
+
+                # Row 2: Valuation Ratios
+                m4, m5, m6 = st.columns(3)
+                m4.metric("52-Wk / YTD Low", f"${data.get('year_to_date_low', 0):,.2f}")
+                
+                trailing_pe = data.get("trailing_pe")
+                m5.metric("Trailing P/E", f"{trailing_pe:,.2f}" if trailing_pe else "N/A")
+                
+                forward_pe = data.get("forward_pe")
+                m6.metric("Forward P/E", f"{forward_pe:,.2f}" if forward_pe else "N/A")
+
+                st.divider()
+
+                # --- COMPANY SUMMARY SECTION ---
+                with st.expander(f"📖 About {data.get('company_name', ticker)}", expanded=True):
+                    st.write(data.get("summary", "No company profile available."))
+
             else:
-            # Display the exact exception detail returned by FastAPI
                 error_msg = response.json().get("detail", "Unknown server error")
                 st.error(f"Backend Error ({response.status_code}): {error_msg}")
 
         except requests.exceptions.ConnectionError:
             st.error("Could not connect to FastAPI backend at http://localhost:8000.")
+
+with tab_rag:
+    st.header("Financial Document Assistant (RAG)")
+    st.caption("Ask questions about company notes indexed in ChromaDB.")
+
+    col_query, col_filter = st.columns([3, 1])
+    with col_filter:
+        ticker_filter = st.text_input("Filter Ticker (Optional)", placeholder="e.g., AAPL")
+        top_k = st.slider("Context Chunks", min_value=1, max_value=8, value=4)
+
+    with col_query:
+        query_text = st.text_area("Your Question", placeholder="Can you describe what Apple does as a company?")
+
+    if st.button("Ask Assistant 🤖", type="primary"):
+        if not query_text.strip():
+            st.warning("Please enter a question.")
+        else:
+            with st.spinner("Searching vector store and generating answer with Gemini..."):
+                payload = {
+                    "query": query_text,
+                    "ticker": ticker_filter.strip().upper() if ticker_filter.strip() else None,
+                    "top_k": top_k,
+                }
+                res = requests.post(
+                    f"{BACKEND_URL}/rag/query",
+                    json=payload,
+                    headers=get_auth_headers(),
+                )
+
+                if res.status_code == 200:
+                    data = res.json()
+                    st.subheader("Answer")
+                    st.write(data["answer"])
+
+                    with st.expander("🔍 View Retrieved Document Chunks"):
+                        for idx, chunk in enumerate(data["retrieved_context"]):
+                            st.markdown(f"**Chunk {idx+1} | Source: `{chunk['metadata'].get('source', 'N/A')}` | Ticker: `{chunk['metadata'].get('ticker', 'N/A')}`**")
+                            st.info(chunk["content"])
+                else:
+                    st.error(f"Error querying RAG assistant: {res.text}")   
+
+with tab_documents:
+    st.header("Vector Store Indexing")
+    st.markdown(
+        """
+        Place your target financial documents (`.txt` or `.md`) into the `./data` directory on the server.
+        
+        **Naming convention recommendation:**
+        * `NVDA_10K.txt` (Starts with ticker + underscore for automatic metadata labeling)
+        * `AAPL_Q3_2024.md`
+        """
+    )
+
+    if st.button("Ingest Files from `./data` Directory"):
+        with st.spinner("Indexing documents into ChromaDB..."):
+            res = requests.post(
+                f"{BACKEND_URL}/rag/ingest",
+                headers=get_auth_headers(),
+            )
+            if res.status_code == 200:
+                result = res.json()
+                st.success(f"Ingestion complete! Successfully indexed **{result['chunks_ingested']}** document chunks into ChromaDB.")
+            else:
+                st.error(f"Failed to ingest documents: {res.text}")                             
