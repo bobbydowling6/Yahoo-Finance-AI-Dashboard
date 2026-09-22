@@ -80,33 +80,95 @@ if not is_authenticated:
     st.info("👈 Please **Log In** or **Register** using the sidebar to access your portfolio and the AI Financial Assistant.")
     st.stop()
 
-tab_portfolio, tab_rag, tab_documents = st.tabs([
-    "📊 Portfolio Tracker", 
+tab_portfolio, tab_stockresearch, tab_rag, tab_documents = st.tabs([
+    "📊 Portfolio Tracker",
+    "📊 Stock Research", 
     "🤖 AI Financial Assistant (RAG)", 
     "📂 Document Ingestion"
-])    
+])
 
-ticker = st.text_input("Enter Stock Ticker:", "AAPL").upper().strip()
+with tab_portfolio:
+    st.header("My Investment Portfolio")
 
-if st.button("Fetch Data"):
-    try:
-        response = requests.get(f"http://localhost:8000/stocks/{ticker}")
-        
-        if response.status_code == 200:
-            data = response.json()
-            st.metric(label=data["company_name"], value=f"${data['current_price']:,.2f}")
-            st.metric(label="Previous Closing Price from Previous Trading Day", value=f"${data['previous_close']:,.2f}")
-            st.metric(label="Company Market Cap", value=f"${data['market_cap']:,.2f}")
-            st.metric(label="Year-to Day High", value=f"${data['year_to_date_high']:,.2f}")
-            st.metric(label="Year-to Day Low", value=f"${data['year_to_date_low']:,.2f}")
-            st.metric(label="Trailing Price to Expense Ratio", value=f"{data['trailing_pe']:,.2f}")
-            st.metric(label="Forward Price to Expense Ratio", value=f"{data['forward_pe']:,.2f}")
+    col1, col2 = st.columns([1, 2])
 
-            st.write(data["summary"])
+    with col1:
+        st.subheader("Add Stock Holding")
+        with st.form("add_stock_form", clear_on_submit=True):
+            ticker_input = st.text_input("Ticker Symbol (e.g., AAPL, NVDA)")
+            shares_input = st.number_input("Shares Owned", min_value=0.01, step=1.0)
+            price_input = st.number_input("Purchase Price ($)", min_value=0.01, step=1.0)
+            submitted = st.form_submit_button("Add Holding")
+
+            if submitted:
+                payload = {
+                    "ticker": ticker_input.strip().upper(),
+                    "shares": shares_input,
+                    "buy_price": price_input,
+                }
+                res = requests.post(
+                    f"{BACKEND_URL}/portfolio/",
+                    json=payload,
+                    headers=get_auth_headers(),
+                )
+                if res.status_code == 201:
+                    st.success(f"Added {ticker_input.upper()} to portfolio!")
+                    st.rerun()
+                else:
+                    st.error(f"Error adding stock: {res.text}")
+    with col2:
+        st.subheader("Current Holdings")
+        res = requests.get(f"{BACKEND_URL}/portfolio/", headers=get_auth_headers())
+
+        if res.status_code == 200:
+            portfolio_items = res.json()
+            if not portfolio_items:
+                st.info("No holdings found. Add your first stock holding using the form on the left!")
+            else:
+                for item in portfolio_items:
+                    with st.container(border=True):
+                        c1, c2, c3, c4 = st.columns([2, 2, 2, 1])
+                        c1.markdown(f"**{item['ticker']}**")
+                        c2.write(f"Shares: {item['shares']}")
+                        c3.write(f"Buy Price: ${item['buy_price']:.2f}")
+
+                        if c4.button("🗑️", key=f"del_{item['id']}"):
+                            del_res = requests.delete(
+                                f"{BACKEND_URL}/portfolio/{item['id']}",
+                                headers=get_auth_headers(),
+                            )
+                            if del_res.status_code == 204:
+                                st.success(f"Removed {item['ticker']}")
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete holding.")
         else:
-            # Display the exact exception detail returned by FastAPI
-            error_msg = response.json().get("detail", "Unknown server error")
-            st.error(f"Backend Error ({response.status_code}): {error_msg}")
+            st.error("Could not load portfolio holdings.")                
 
-    except requests.exceptions.ConnectionError:
-        st.error("Could not connect to FastAPI backend at http://localhost:8000.")
+with tab_stockresearch:
+    st.header("Stock Research")
+
+    ticker = st.text_input("Enter Stock Ticker:", "AAPL").upper().strip()
+
+    if st.button("Fetch Data"):
+        try:
+            response = requests.get(f"http://localhost:8000/stocks/{ticker}")
+        
+            if response.status_code == 200:
+                data = response.json()
+                st.metric(label=data["company_name"], value=f"${data['current_price']:,.2f}")
+                st.metric(label="Previous Closing Price from Previous Trading Day", value=f"${data['previous_close']:,.2f}")
+                st.metric(label="Company Market Cap", value=f"${data['market_cap']:,.2f}")
+                st.metric(label="Year-to Day High", value=f"${data['year_to_date_high']:,.2f}")
+                st.metric(label="Year-to Day Low", value=f"${data['year_to_date_low']:,.2f}")
+                st.metric(label="Trailing Price to Expense Ratio", value=f"{data['trailing_pe']:,.2f}")
+                st.metric(label="Forward Price to Expense Ratio", value=f"{data['forward_pe']:,.2f}")
+
+                st.write(data["summary"])
+            else:
+            # Display the exact exception detail returned by FastAPI
+                error_msg = response.json().get("detail", "Unknown server error")
+                st.error(f"Backend Error ({response.status_code}): {error_msg}")
+
+        except requests.exceptions.ConnectionError:
+            st.error("Could not connect to FastAPI backend at http://localhost:8000.")
