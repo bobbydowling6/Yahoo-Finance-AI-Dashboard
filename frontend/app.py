@@ -267,13 +267,10 @@ with tab_stockresearch:
     col_search, col_btn = st.columns([4, 1], vertical_alignment="bottom")
     with col_search:
         ticker = st.text_input("Enter Stock Ticker:", "AAPL", help="e.g. AAPL, NVDA, MSFT").upper().strip()
-    with col_btn:
-        fetch_clicked = st.button("Fetch Data", type="primary", width="stretch")
-        st.session_state.selected_ticker = ticker_input
 
     active_ticker = st.session_state.selected_ticker    
 
-    if fetch_clicked:
+    if ticker:
         try:
             with st.spinner(f"Fetching market data for {ticker}..."):
                 response = requests.get(f"http://localhost:8000/stocks/{ticker}")
