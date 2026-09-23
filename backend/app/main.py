@@ -1,6 +1,8 @@
-from builtins import Exception
 import os
 import tomllib
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
@@ -10,34 +12,54 @@ from app.db.models import Base, engine, get_db, User, Portfolio
 from app.schemas.schemas import UserCreate, UserResponse, Token, PortfolioCreate, PortfolioResponse, StockDataResponse
 from app.core.security import get_password_hash, verify_password, create_access_token, get_current_user
 from app.services.yahoo_services import get_stock_data
+from app.api.rag_router import rag_router
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_PATH = os.path.join(BASE_DIR, "config.toml")
+# =====================================================================
+# CONFIGURATION LOADING
+# =====================================================================
+# Search for config.toml at project root or backend/ directory
+CURRENT_FILE = Path(__file__).resolve()
+PROJECT_ROOT = CURRENT_FILE.parents[2]  # Yahoo-Finance-AI-Dashboard/
+BACKEND_ROOT = CURRENT_FILE.parents[1]  # backend/
 
-# Read TOML settings
-if os.path.exists(CONFIG_PATH):
-    with open(CONFIG_PATH, "rb") as f:
+config_path = PROJECT_ROOT / "config.toml"
+if not config_path.exists():
+    config_path = BACKEND_ROOT / "config.toml"
+
+config = {}
+if config_path.exists():
+    with open(config_path, "rb") as f:
         config = tomllib.load(f)
-else:
-    config = {}
 
-# Extract nested TOML sections with fallbacks
+# Set Gemini API Key if present in config
+api_key = config.get("GEMINI_API_KEY") or config.get("gemini", {}).get("api_key")
+if api_key:
+    os.environ["GEMINI_API_KEY"] = api_key
+
 app_config = config.get("app", {})
 server_config = config.get("server", {})
 
+
 # =====================================================================
-# FASTAPI APP INITIALIZATION
+# LIFESPAN & FASTAPI APP INITIALIZATION
 # =====================================================================
-Base.metadata.create_all(bind=engine)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Initialize database tables
+    Base.metadata.create_all(bind=engine)
+    yield
+    # Shutdown logic (if needed)
+
 
 app = FastAPI(
     title=app_config.get("title", "Yahoo Finance RAG Tracker API"),
     version=app_config.get("version", "1.0.0"),
     description=app_config.get("description", "API for portfolio tracking and RAG financial research"),
+    lifespan=lifespan,
 )
 
-# Optional CORS middleware setup using allowed origins from config.toml
-allowed_origins = server_config.get("cors_origins", ["*"])
+# Setup CORS Middleware
+allowed_origins = server_config.get("cors_origins", ["http://localhost:8501", "http://127.0.0.1:8501", "*"])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -45,6 +67,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register RAG Router
+app.include_router(rag_router)
 
 
 # =====================================================================
@@ -82,14 +107,19 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
-# Fetching Yahoo Finance API Service
-@app.get("/stocks/{ticker}", response_model=StockDataResponse,tags=["Stocks"])
+
+# =====================================================================
+# STOCKS ENDPOINTS
+# =====================================================================
+@app.get("/stocks/{ticker}", response_model=StockDataResponse, tags=["Stocks"])
 def fetch_stock_info(ticker: str):
+    """Fetch live Yahoo Finance ticker data."""
     try:
-        data = get_stock_data(ticker)
-        return data
+        return get_stock_data(ticker)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to fetch ticker data: {str(e)}")
+
+
 # =====================================================================
 # PORTFOLIO ENDPOINTS (PROTECTED)
 # =====================================================================
@@ -100,11 +130,9 @@ def add_portfolio_item(
     db: Session = Depends(get_db)
 ):
     """Add a stock holding to the current user's portfolio."""
-    ticker_upper = item_in.ticker.upper().strip()
-    
     portfolio_item = Portfolio(
         user_id=current_user.id,
-        ticker=ticker_upper,
+        ticker=item_in.ticker.upper().strip(),
         shares=item_in.shares,
         buy_price=item_in.buy_price
     )
