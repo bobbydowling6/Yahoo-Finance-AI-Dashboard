@@ -1,6 +1,7 @@
 {
   "name": "Python & Docker Dev Environment",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bookworm",
+  "onCreateCommand": "sudo rm -f /etc/apt/sources.list.d/yarn.list && sudo apt-get update",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {}
   },
