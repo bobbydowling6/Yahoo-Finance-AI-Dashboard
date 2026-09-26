@@ -5,7 +5,7 @@ import plotly.express as px
 import pandas as pd
 import yfinance
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://yahoo_finance_backend:8000")
 
 st.set_page_config(
     page_title="Yahoo Finance AI Portfolio Assistant",
@@ -46,14 +46,19 @@ def render_auth_sidebar():
                 st.sidebar.error("Please fill in all fields.")
                 return False
 
-            res = requests.post(
-                f"{BACKEND_URL}/auth/register",
-                json={"email": email, "password": password},
-            )
-            if res.status_code == 201:
-                st.sidebar.success("Account created! Please switch to Login.")
-            else:
-                st.sidebar.error(res.json().get("detail", "Registration failed."))
+            try:
+                res = requests.post(
+                    f"{BACKEND_URL}/auth/register",
+                    json={"email": email, "password": password},
+                    timeout=5,
+                )
+                if res.status_code == 201:
+                    st.sidebar.success("Account created! Please switch to Login.")
+                else:
+                    st.sidebar.error(res.json().get("detail", "Registration failed."))
+            except requests.exceptions.RequestException:
+                st.sidebar.error("Backend service is temporarily unreachable.")
+                return False
 
     elif auth_mode == "Login":
         if st.sidebar.button("Log In"):
@@ -61,18 +66,23 @@ def render_auth_sidebar():
                 st.sidebar.error("Please fill in all fields.")
                 return False
 
-            res = requests.post(
-                f"{BACKEND_URL}/auth/login",
-                data={"username": email, "password": password},
-            )
-            if res.status_code == 200:
-                token_data = res.json()
-                st.session_state.token = token_data["access_token"]
-                st.session_state.user_email = email
-                st.sidebar.success("Logged in successfully!")
-                st.rerun()
-            else:
-                st.sidebar.error("Invalid credentials.")
+            try:
+                res = requests.post(
+                    f"{BACKEND_URL}/auth/login",
+                    data={"username": email, "password": password},
+                    timeout=5,
+                )
+                if res.status_code == 200:
+                    token_data = res.json()
+                    st.session_state.token = token_data["access_token"]
+                    st.session_state.user_email = email
+                    st.sidebar.success("Logged in successfully!")
+                    st.rerun()
+                else:
+                    st.sidebar.error("Invalid credentials.")
+            except requests.exceptions.RequestException:
+                st.sidebar.error("Backend service is temporarily unreachable. Please wait a moment.")
+            return False
 
     return False
 
@@ -103,12 +113,12 @@ with tab_portfolio:
     fetch_error = False
 
     try:
-        res = requests.get(f"{BACKEND_URL}/portfolio/", headers=get_auth_headers())
+        res = requests.get(f"{BACKEND_URL}/portfolio/", headers=get_auth_headers(), timeout=5)
         if res.status_code == 200:
             portfolio_items = res.json()
         else:
             fetch_error = True
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.RequestException:
         fetch_error = True
 
     if fetch_error:
@@ -168,16 +178,20 @@ with tab_portfolio:
                                 "shares": shares_input,
                                 "buy_price": price_input,
                             }
-                            res = requests.post(
-                                f"{BACKEND_URL}/portfolio/",
-                                json=payload,
-                                headers=get_auth_headers(),
-                            )
-                            if res.status_code == 201:
-                                st.toast(f"Added {ticker_input} to portfolio!", icon="✅")
-                                st.rerun()
-                            else:
-                                st.error(f"Error adding stock: {res.text}")
+                            try:
+                                res = requests.post(
+                                    f"{BACKEND_URL}/portfolio/",
+                                    json=payload,
+                                    headers=get_auth_headers(),
+                                    timeout=5,
+                                )
+                                if res.status_code == 201:
+                                    st.toast(f"Added {ticker_input} to portfolio!", icon="✅")
+                                    st.rerun()
+                                else:
+                                    st.error(f"Error adding stock: {res.text}")
+                            except requests.exceptions.RequestException:
+                                st.error("Failed to connect to backend to add holding.")
 
         # RIGHT COLUMN: Holdings Table & Visualization
         with col_holdings:
@@ -215,15 +229,19 @@ with tab_portfolio:
                         with del_col2:
                             if st.button("Delete", type="secondary", width="stretch"):
                                 if target_to_del:
-                                    del_res = requests.delete(
-                                        f"{BACKEND_URL}/portfolio/{target_to_del['id']}",
-                                        headers=get_auth_headers(),
-                                    )
-                                    if del_res.status_code in (200, 204):
-                                        st.toast(f"Removed {target_to_del['ticker']}", icon="🗑️")
-                                        st.rerun()
-                                    else:
-                                        st.error("Failed to delete holding.")
+                                    try:
+                                        del_res = requests.delete(
+                                            f"{BACKEND_URL}/portfolio/{target_to_del['id']}",
+                                            headers=get_auth_headers(),
+                                            timeout=5,
+                                        )
+                                        if del_res.status_code in (200, 204):
+                                            st.toast(f"Removed {target_to_del['ticker']}", icon="🗑️")
+                                            st.rerun()
+                                        else:
+                                            st.error("Failed to delete holding.")
+                                    except requests.exceptions.RequestException:
+                                        st.error("Failed to connect to backend to delete holding.")
 
                 with view_chart:
                     fig_donut = px.pie(
@@ -268,7 +286,7 @@ with tab_stockresearch:
     if ticker:
         try:
             with st.spinner(f"Fetching market data for {ticker}..."):
-                response = requests.get(f"{BACKEND_URL}/stocks/{ticker}")
+                response = requests.get(f"{BACKEND_URL}/stocks/{ticker}", timeout=5)
 
             if response.status_code == 200:
                 data = response.json()
@@ -362,7 +380,7 @@ with tab_stockresearch:
                 error_msg = response.json().get("detail", "Unknown server error")
                 st.error(f"Backend Error ({response.status_code}): {error_msg}")
 
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.RequestException:
             st.error(f"Could not connect to FastAPI backend at {BACKEND_URL}.")
 
 
@@ -391,42 +409,45 @@ with tab_rag:
                     "ticker": ticker_filter.strip().upper() if ticker_filter.strip() else None,
                     "top_k": top_k,
                 }
-                res = requests.post(
-                    f"{BACKEND_URL}/rag/query",
-                    json=payload,
-                    headers=get_auth_headers(),
-                )
+                try:
+                    res = requests.post(
+                        f"{BACKEND_URL}/rag/query",
+                        json=payload,
+                        headers=get_auth_headers(),
+                        timeout=15,
+                    )
 
-                if res.status_code == 200:
-                    rag_data = res.json()
-                    st.subheader("Answer")
-                    st.write(rag_data.get("answer", "No answer returned."))
+                    if res.status_code == 200:
+                        rag_data = res.json()
+                        st.subheader("Answer")
+                        st.write(rag_data.get("answer", "No answer returned."))
 
-                    # Robust Chunk Rendering
-                    retrieved_chunks = rag_data.get("retrieved_context", [])
-                    st.divider()
-                    with st.expander("🔍 View Retrieved Document Chunks", expanded=False):
-                        if not retrieved_chunks:
-                            st.info("No reference document chunks were retrieved from ChromaDB for this query.")
-                        else:
-                            for idx, chunk in enumerate(retrieved_chunks, 1):
-                                # Extract content across common schema variations
-                                content = (
-                                    chunk.get("content") 
-                                    or chunk.get("text") 
-                                    or chunk.get("document", "No chunk text available")
-                                )
-                                metadata = chunk.get("metadata", {})
-                                source = metadata.get("source", "Unknown Source")
-                                ticker_meta = metadata.get("ticker", "N/A")
-                                chunk_idx = metadata.get("chunk_idx", "N/A")
+                        # Robust Chunk Rendering
+                        retrieved_chunks = rag_data.get("retrieved_context", [])
+                        st.divider()
+                        with st.expander("🔍 View Retrieved Document Chunks", expanded=False):
+                            if not retrieved_chunks:
+                                st.info("No reference document chunks were retrieved from ChromaDB for this query.")
+                            else:
+                                for idx, chunk in enumerate(retrieved_chunks, 1):
+                                    content = (
+                                        chunk.get("content") 
+                                        or chunk.get("text") 
+                                        or chunk.get("document", "No chunk text available")
+                                    )
+                                    metadata = chunk.get("metadata", {})
+                                    source = metadata.get("source", "Unknown Source")
+                                    ticker_meta = metadata.get("ticker", "N/A")
+                                    chunk_idx = metadata.get("chunk_idx", "N/A")
 
-                                st.markdown(
-                                    f"**Chunk #{idx}** | 📄 Source: `{source}` | 📈 Ticker: `{ticker_meta}` | 🔢 Index: `{chunk_idx}`"
-                                )
-                                st.info(content)
-                else:
-                    st.error(f"Error querying RAG assistant: {res.text}")
+                                    st.markdown(
+                                        f"**Chunk #{idx}** | 📄 Source: `{source}` | 📈 Ticker: `{ticker_meta}` | 🔢 Index: `{chunk_idx}`"
+                                    )
+                                    st.info(content)
+                    else:
+                        st.error(f"Error querying RAG assistant: {res.text}")
+                except requests.exceptions.RequestException:
+                    st.error("Could not connect to the RAG backend service.")
 
 
 # =====================================================================
@@ -446,12 +467,16 @@ with tab_documents:
 
     if st.button("Ingest Files from `./docs` Directory", type="primary"):
         with st.spinner("Indexing documents into ChromaDB..."):
-            res = requests.post(
-                f"{BACKEND_URL}/rag/ingest",
-                headers=get_auth_headers(),
-            )
-            if res.status_code == 200:
-                result = res.json()
-                st.success(f"Ingestion complete! Successfully indexed **{result.get('chunks_ingested', 0)}** document chunks into ChromaDB.")
-            else:
-                st.error(f"Failed to ingest documents: {res.text}")
+            try:
+                res = requests.post(
+                    f"{BACKEND_URL}/rag/ingest",
+                    headers=get_auth_headers(),
+                    timeout=30,
+                )
+                if res.status_code == 200:
+                    result = res.json()
+                    st.success(f"Ingestion complete! Successfully indexed **{result.get('chunks_ingested', 0)}** document chunks into ChromaDB.")
+                else:
+                    st.error(f"Failed to ingest documents: {res.text}")
+            except requests.exceptions.RequestException:
+                st.error("Failed to connect to backend for document ingestion.")

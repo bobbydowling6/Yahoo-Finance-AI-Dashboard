@@ -22,15 +22,14 @@ CURRENT_FILE = Path(__file__).resolve()
 PROJECT_ROOT = CURRENT_FILE.parents[2]  # Yahoo-Finance-AI-Dashboard/
 BACKEND_ROOT = CURRENT_FILE.parents[1]  # backend/
 
-config_path = PROJECT_ROOT / "config.toml"
-if not config_path.exists():
-    config_path = BACKEND_ROOT / "config.toml"
+config_path = PROJECT_ROOT / "/app/config.toml"
 
 config = {}
 if config_path.exists():
     with open(config_path, "rb") as f:
         config = tomllib.load(f)
-
+else:
+    print(f"WARNING: {config_path} is missing or is a directory. Using default settings.")
 # Set Gemini API Key if present in config
 api_key = config.get("GEMINI_API_KEY") or config.get("gemini", {}).get("api_key")
 if api_key:

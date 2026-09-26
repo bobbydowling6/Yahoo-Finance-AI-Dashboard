@@ -1,0 +1,24 @@
+# Python virtual environments & bytecode
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+
+# Git metadata
+.git/
+.gitignore
+
+# Streamlit local configuration & secrets
+.streamlit/secrets.toml
+
+# IDE & system artifacts
+.vscode/
+.idea/
+.DS_Store
+
+# Docker files
+Dockerfile
+.dockerignore
+config.toml

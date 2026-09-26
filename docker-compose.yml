@@ -1,24 +1,41 @@
-version: '3.8'
 
 services:
-  backend:
-    build:
+  yahoo_finance_backend:
+    build: 
       context: ./backend
       dockerfile: Dockerfile
+    container_name: yahoo_finance_backend
+    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      # Persist SQLite DB and ChromaDB vector store between restarts
+      - ./backend/chroma_db:/app/chroma_db
+      - ./backend/app.db:/app/app.db
+      # Mount config.toml if your app reads config from root/backend
+      - ./config.toml:/app/config.toml
     environment:
-      - PROJECT_ROOT=/app
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - CHROMA_PATH=/app/chroma_db
+    networks:
+      - app-network
 
-  frontend:
-    build:
+  yahoo_finance_frontend:
+    build: 
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: yahoo_finance_frontend
+    command: python -m streamlit run app.py --server.port=8501 --server.address=0.0.0.0
     ports:
       - "8501:8501"
-    volumes:
-      - ./frontend:/app
+    environment:
+      - BACKEND_URL=http://yahoo_finance_backend:8000
     depends_on:
-      - backend
+      - yahoo_finance_backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

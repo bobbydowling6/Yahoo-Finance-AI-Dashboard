@@ -8,16 +8,28 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
+from app.core.config import config
 
 from app.db.models import User, get_db
 from app.schemas.schemas import TokenData
 
-# Locate and read the config.toml file
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-CONFIG_PATH = PROJECT_ROOT / "config.toml"
+# /app/app/core/security.py -> .parent (core) -> .parent (app) -> .parent (/app)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-with open(CONFIG_PATH, "rb") as f:
-    config = tomllib.load(f)
+POSSIBLE_PATHS = [
+    BASE_DIR / "config.toml",              # /app/config.toml
+    Path.cwd() / "config.toml",            # Current working directory
+    Path("/app/config.toml"),              # Explicit container working path
+]
+
+CONFIG_PATH = next((p for p in POSSIBLE_PATHS if p.exists()), None)
+
+config = {}
+if CONFIG_PATH and CONFIG_PATH.is_file():
+    with open(CONFIG_PATH, "rb") as f:
+        config = tomllib.load(f)
+else:
+    print(f"WARNING: config.toml not found in {POSSIBLE_PATHS}. Fallback to env or defaults.")
 
 # Access variables via the [database.users] table dictionary
 db_user_config = config.get("database", {}).get("users", {})
