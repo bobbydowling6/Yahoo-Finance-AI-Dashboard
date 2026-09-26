@@ -10,7 +10,7 @@ from google.genai.errors import APIError
 
 CURRENT_FILE = Path(__file__).resolve()
 # Navigates up from app/services/rag_services.py -> app/services -> app -> backend -> Project Root
-PROJECT_ROOT = CURRENT_FILE.parents[3]
+PROJECT_ROOT = CURRENT_FILE.parents[2]
 
 # Global Constants & Configuration
 CHROMA_PATH = os.getenv("CHROMA_PATH", str(PROJECT_ROOT / "chroma_db"))
@@ -69,16 +69,16 @@ def ingest_documents_from_directory(target_dir: str = "docs") -> int:
     """Ingests text/markdown files into ChromaDB using absolute path resolution."""
     docs_path = PROJECT_ROOT / target_dir if not Path(target_dir).is_absolute() else Path(target_dir)
 
+    # Ensure the directory exists so it doesn't throw errors
+    docs_path.mkdir(parents=True, exist_ok=True)
+
     print(f"🔍 DEBUG: Scanning directory for ingestion: {docs_path.resolve()}")
-    
-    if not docs_path.exists():
-        print(f"❌ DEBUG: Directory does NOT exist: {docs_path.resolve()}")
-        return 0
 
     files = list(docs_path.glob("*.txt")) + list(docs_path.glob("*.md"))
     print(f"🔍 DEBUG: Found {len(files)} document file(s): {[f.name for f in files]}")
 
     if not files:
+        print(f"⚠️ DEBUG: No .txt or .md files found in {docs_path.resolve()}. Skipping ingestion.")
         return 0
 
     total_chunks = 0

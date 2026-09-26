@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.models import Base, get_db
-from app.main import app
+from backend.app.main import app
 
 # In-memory test database setup
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///:memory:"

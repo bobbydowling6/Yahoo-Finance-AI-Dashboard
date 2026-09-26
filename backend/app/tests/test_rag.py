@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 # Ensure all database models are explicitly imported first
 from app.db.models import Base, get_db, User, Portfolio
-from app.main import app
+from backend.app.main import app
 
 # Use StaticPool to persist in-memory SQLite tables across multiple session connections
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///:memory:"

@@ -8,16 +8,20 @@ services:
     command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
+    working_dir: /app  
     volumes:
       # Persist SQLite DB and ChromaDB vector store between restarts
       - ./backend/chroma_db:/app/chroma_db
       - ./backend/app.db:/app/app.db
       # Mount config.toml if your app reads config from root/backend
+      - ./backend:/app
       - ./config.toml:/app/config.toml
+      - ./docs:/docs
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
       - CHROMA_PATH=/app/chroma_db
+      - PYTHONPATH=/app
     networks:
       - app-network
 
