@@ -1,3 +1,4 @@
+version: '3.8'
 
 services:
   yahoo_finance_backend:
@@ -10,13 +11,14 @@ services:
       - "8000:8000"
     working_dir: /app  
     volumes:
-      # Persist SQLite DB and ChromaDB vector store between restarts
+      # 1. Mount parent directory first
+      - ./backend:/app
+      # 2. Specific file and folder overrides
       - ./backend/chroma_db:/app/chroma_db
       - ./backend/app.db:/app/app.db
-      # Mount config.toml if your app reads config from root/backend
-      - ./backend:/app
       - ./config.toml:/app/config.toml
-      - ./docs:/docs
+      # 3. Host ./docs mapped to /app/docs
+      - ./docs:/app/docs
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - SECRET_KEY=${SECRET_KEY}

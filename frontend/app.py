@@ -3,7 +3,7 @@ import requests
 import streamlit as st
 import plotly.express as px
 import pandas as pd
-import yfinance
+import yfinance as yf
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://yahoo_finance_backend:8000")
 
@@ -102,6 +102,34 @@ tab_portfolio, tab_stockresearch, tab_rag, tab_documents = st.tabs([
     "📂 Document Ingestion"
 ])
 
+
+def fetch_live_prices(tickers):
+    """Batch fetch current stock prices using yfinance fast_info."""
+    if not tickers:
+        return {}
+    
+    ticker_string = " ".join(set(tickers))
+    try:
+        yf_data = yf.Tickers(ticker_string)
+        live_prices = {}
+        for symbol in set(tickers):
+            try:
+                ticker_obj = yf_data.tickers.get(symbol)
+                if ticker_obj:
+                    # Fetch real-time or last known market price
+                    price = (
+                        getattr(ticker_obj.fast_info, 'last_price', None) or 
+                        getattr(ticker_obj.fast_info, 'regular_market_price', None)
+                    )
+                    if price:
+                        live_prices[symbol] = float(price)
+            except Exception:
+                continue
+        return live_prices
+    except Exception:
+        return {}
+
+
 # =====================================================================
 # TAB 1: PORTFOLIO TRACKER
 # =====================================================================
@@ -128,10 +156,25 @@ with tab_portfolio:
         if portfolio_items:
             df_portfolio = pd.DataFrame(portfolio_items)
 
+            # Ensure buy_price is present
+            if 'buy_price' not in df_portfolio.columns and 'price' in df_portfolio.columns:
+                df_portfolio['buy_price'] = df_portfolio['price']
+
+            # 1. Fetch live market prices via yfinance
+            unique_tickers = df_portfolio['ticker'].unique().tolist()
+            live_price_map = fetch_live_prices(unique_tickers)
+
+            # 2. Compute dynamic metrics against live market prices
+            df_portfolio['current_price'] = df_portfolio['ticker'].map(live_price_map)
+            # Fall back to buy_price if live price retrieval fails
+            df_portfolio['current_price'] = df_portfolio['current_price'].fillna(df_portfolio['buy_price'])
+
             df_portfolio['total_cost'] = df_portfolio['shares'] * df_portfolio['buy_price']
-            df_portfolio['current_price'] = df_portfolio.get('current_price', df_portfolio['buy_price'])
             df_portfolio['market_value'] = df_portfolio['shares'] * df_portfolio['current_price']
             df_portfolio['unrealized_gain'] = df_portfolio['market_value'] - df_portfolio['total_cost']
+            df_portfolio['return_pct'] = (
+                (df_portfolio['unrealized_gain'] / df_portfolio['total_cost']) * 100
+            ).fillna(0.0)
 
             total_portfolio_val = df_portfolio['market_value'].sum()
             total_cost_basis = df_portfolio['total_cost'].sum()
@@ -203,16 +246,24 @@ with tab_portfolio:
                 view_table, view_chart = st.tabs(["📋 Positions Table", "🍩 Asset Allocation"])
 
                 with view_table:
-                    display_df = df_portfolio[['id', 'ticker', 'shares', 'buy_price', 'market_value']].copy()
-                    display_df.columns = ['ID', 'Ticker', 'Shares', 'Avg Buy Price ($)', 'Market Value ($)']
+                    display_df = df_portfolio[[
+                        'id', 'ticker', 'shares', 'buy_price', 'current_price', 'market_value', 'unrealized_gain', 'return_pct'
+                    ]].copy()
+                    
+                    display_df.columns = [
+                        'ID', 'Ticker', 'Shares', 'Avg Buy Price ($)', 'Live Price ($)', 'Market Value ($)', 'Gain / Loss ($)', 'Return (%)'
+                    ]
 
                     st.dataframe(
                         display_df,
                         column_config={
                             "ID": None,
-                            "Avg Buy Price ($)": st.column_config.NumberColumn(format="$%.2f"),
-                            "Market Value ($)": st.column_config.NumberColumn(format="$%.2f"),
                             "Shares": st.column_config.NumberColumn(format="%.2f"),
+                            "Avg Buy Price ($)": st.column_config.NumberColumn(format="$%.2f"),
+                            "Live Price ($)": st.column_config.NumberColumn(format="$%.2f"),
+                            "Market Value ($)": st.column_config.NumberColumn(format="$%.2f"),
+                            "Gain / Loss ($)": st.column_config.NumberColumn(format="$%+,.2f"),
+                            "Return (%)": st.column_config.NumberColumn(format="%+.2f%%"),
                         },
                         hide_index=True,
                         width="stretch"
@@ -224,7 +275,7 @@ with tab_portfolio:
                             target_to_del = st.selectbox(
                                 "Select holding to remove:",
                                 options=portfolio_items,
-                                format_func=lambda x: f"{x['ticker']} — {x['shares']} shares @ ${x['buy_price']:.2f}"
+                                format_func=lambda x: f"{x['ticker']} — {x['shares']} shares @ ${x.get('buy_price', x.get('price', 0)):.2f}"
                             )
                         with del_col2:
                             if st.button("Delete", type="secondary", width="stretch"):
@@ -316,7 +367,7 @@ with tab_stockresearch:
                 )
 
                 try:
-                    stock_obj = yfinance.Ticker(ticker)
+                    stock_obj = yf.Ticker(ticker)
                     hist_df = stock_obj.history(period=selected_period)
 
                     if not hist_df.empty:
