@@ -1,59 +1,136 @@
-Project Title
-FinInsight AI: Personal Investment & RAG-Powered Yahoo Finance Dashboard
+# FinInsight AI: Personal Investment & RAG-Powered Yahoo Finance Dashboard
 
-User Story
-As an retail investor,
-I want to log into a personalized financial dashboard to view live portfolio stock prices, read relevant news, and query financial context using an AI assistant,
-So that I can make informed investment decisions in one consolidated interface without jumping between external tabs.
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-FF4B4B)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-VectorStore-orange)
+![Google Gemini](https://img.shields.io/badge/LLM-Google%20Gemini-8E75B2)
 
-Component Mapping, Data Architecture & Tech Stack
-Tech Stack Overview
-Frontend: Streamlit
-Backend Framework: FastAPI
-ORM & Database: SQLAlchemy with SQLite
-Authentication: JWT (JSON Web Tokens) with passlib (bcrypt)
-Vector Store & Embeddings: ChromaDB with sentence-transformers
-LLM Engine: Google Gemini API
-Data Sources: yfinance library (Live market data/news), Local text domain files
-Environment & Package Management: Miniforge3 (Conda environment)
+**FinInsight AI** is an all-in-one financial intelligence platform that combines real-time portfolio performance tracking with a Retrieval-Augmented Generation (RAG) assistant. Built with **FastAPI**, **Streamlit**, **SQLite/SQLAlchemy**, **ChromaDB**, and **Google Gemini**, it allows retail investors to track positions against live market data from Yahoo Finance and query financial documents with grounded AI answers.
 
-SQLAlchemy Database Models & Relationships
-User Table
-id (Integer, Primary Key, Index)
-email (String, Unique, Index, Nullable=False)
-hashed_password (String, Nullable=False)
-created_at (DateTime, Default=UTC)
-Relationship: portfolio_items = relationship("Portfolio", back_populates="owner", cascade="all, delete-orphan")
+---
 
-Portfolio Table
-id (Integer, Primary Key, Index)
-user_id (Integer, ForeignKey("users.id"), Nullable=False)
-ticker (String(10), Nullable=False, Index=True)
-shares_owned (Float, Nullable=False)
-buy_price (Float, Nullable=False)
-created_at (DateTime, Default=UTC)
-Relationship: owner = relationship("User", back_populates="portfolio_items")
+## 👤 User Story
 
-Pydantic Schemas
-Auth: UserCreate, UserLogin, Token, TokenData
-Portfolio: PortfolioCreate, PortfolioResponse (maps from ORM), PortfolioSummaryResponse
-RAG Pipeline: RAGQueryRequest, RAGQueryResponse (includes answer and sources list), IngestionStatusResponse
-API Endpoints (FastAPI)
-POST /auth/register – Creates a user account with hashed credentials.
-POST /auth/login – Returns a JWT Access Token upon credential verification.
-POST /portfolio_item – Adds a stock ticker, shares, and buy price (Requires JWT).
-GET /portfolio – Returns user's active portfolio items populated with live yfinance pricing (Requires JWT).
-DELETE /portfolio_item/{portfolio_id} – Removes a portfolio item owned by the user (Requires JWT).
-POST /rag/ingest – Ingests local company .txt summary files into ChromaDB.
-POST /rag/query – Executes similarity search in ChromaDB and forwards context to Google Gemini for a grounded response.
+> **As a retail investor**, I want to log into a personalized financial dashboard to view live portfolio stock prices, monitor position gains/losses, and query financial context using an AI assistant, **so that** I can make informed investment decisions in one consolidated interface without jumping between external tabs.
 
-Data Source Details & Volume Estimate
-Volume Estimate: Initial RAG dataset consists of 10–20 textual files (~50–100 KB total) containing structured company profiles (e.g., Apple, SoFi) formatted as clean .txt documents.
+---
 
-Compliance & Redistribution Note: To adhere to terms of service regarding live financial web scraping, all ingested RAG text files will use publicly disclosed SEC filings (10-K summaries) or original factual company descriptions rather than proprietary, copyrighted news content copied straight from live sites. Live market rates will be pulled directly on-demand via the yfinance Python interface.
+## 🏗️ Tech Stack Overview
 
-Testing, Documentation & Setup
-Testing Strategy: Automated backend API endpoint test suite written with pytest and httpx.AsyncClient to test route responses, database operations, and authentication logic.
-Repository Deliverables:
-requirements.txt: Pinning dependencies (fastapi, sqlalchemy, pydantic, yfinance, chromadb, google-genai, streamlit, python-jose, passlib).
-README.md: Containing architecture diagrams, setup/installation steps via Miniforge3, .env.exampleguidance, database migration commands, and API execution steps.
+| Layer | Technology | Usage / Purpose |
+| :--- | :--- | :--- |
+| **Frontend** | Streamlit | Interactive multi-tab user interface |
+| **Backend Framework** | FastAPI | Async REST API & authentication endpoints |
+| **ORM & Database** | SQLAlchemy + SQLite | Relational persistence for users & portfolio holdings |
+| **Authentication** | JWT (JSON Web Tokens) | Secure auth with `passlib` (bcrypt) & `python-jose` |
+| **Vector Store & Embeddings** | ChromaDB + `sentence-transformers` | Semantic document chunking & vector indexing |
+| **LLM Engine** | Google Gemini API (`google-genai`) | Grounded financial question answering |
+| **Data Sources** | `yfinance` & Local `.txt`/`.md` files | Live market data/quotes & local 10-K context files |
+| **Environment & Tooling** | Miniforge3 (Conda) / Docker | Python environment management & containerization |
+
+---
+
+## 📊 Data Architecture & Schemas
+
+### Database Models & Relationships (SQLAlchemy)
+
+┌──────────────────┐               ┌───────────────────────┐
+    │      Users       │               │       Portfolio       │
+    ├──────────────────┤               ├───────────────────────┤
+    │ id (PK)          │ 1           * │ id (PK)               │
+    │ email (Unique)   ├───────────────┤ user_id (FK -> users) │
+    │ hashed_password  │  (1-to-Many)  │ ticker                │
+    │ created_at       │               │ shares_owned          │
+    └──────────────────┘               │ buy_price             │
+                                       │ created_at            │
+                                       └───────────────────────┘
+
+* **User Model**: Stores unique user credentials with hashed passwords. Cascade deletion configured for associated portfolio items.
+* **Portfolio Model**: Tracks equity positions per user, including ticker, share quantity, and initial cost basis (`buy_price`).
+
+### Pydantic Schemas
+
+* **Auth**: `UserCreate`, `UserLogin`, `Token`, `TokenData`
+* **Portfolio**: `PortfolioCreate`, `PortfolioResponse`, `PortfolioSummaryResponse`
+* **RAG Pipeline**: `RAGQueryRequest`, `RAGQueryResponse` (returns answer + retrieved chunk sources), `IngestionStatusResponse`
+
+---
+
+## 🔌 API Endpoints Summary
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :---: |
+| `POST` | `/auth/register` | Register a new user account | ❌ |
+| `POST` | `/auth/login` | Authenticate & obtain JWT Access Token | ❌ |
+| `POST` | `/portfolio/` | Add stock holding (ticker, shares, buy price) | ✅ |
+| `GET` | `/portfolio/` | Fetch user portfolio populated with live `yfinance` pricing | ✅ |
+| `DELETE` | `/portfolio/{portfolio_id}` | Remove position by ID | ✅ |
+| `GET` | `/stocks/{ticker}` | Retrieve fundamentals & historical chart data | ❌ |
+| `POST` | `/rag/ingest` | Ingest local `.txt`/`.md` documents into ChromaDB | ✅ |
+| `POST` | `/rag/query` | Vector search in ChromaDB + Google Gemini RAG generation | ✅ |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+* **Miniforge3 / Conda** or **Docker & Docker Compose**
+* **Google Gemini API Key** (Obtain from [Google AI Studio](https://aistudio.google.com/))
+
+---
+
+### Method 1: Local Setup with Miniforge3 (Conda)
+
+1. **Clone the Repository**
+   ```bash
+   git clone [https://github.com/your-username/fininsight-ai.git](https://github.com/your-username/fininsight-ai.git)
+   cd fininsight-ai
+
+2. **Create and Activate Conda Environment**
+Bash
+conda create -n fininsight python=3.10 -y
+conda activate fininsight
+
+3. **Install Dependencies**
+pip install -r requirements.txt
+
+4. **Environment Configuration**
+Create a .env file in the root directory:
+GEMINI_API_KEY=your_google_gemini_api_key_here
+SECRET_KEY=your_jwt_secret_key_here
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+DATABASE_URL=sqlite:///./fininsight.db
+BACKEND_URL=http://localhost:8000
+
+5. **Start Services**
+   Backend (FASTAPI):
+   uvicorn backend.app.main:app --reload --port 8000
+
+   Frontend (Streamlit) (in a new terminal tab):
+   streamlit run frontend/app.py
+
+### Method 2: Docker Compose
+Alternatively, launch the entire application stack using Docker Compose:
+docker compose up --build -d
+
+Frontend Dashboard: http://localhost:8501
+FastAPI Docs (Swagger): http://localhost:8000/docs
+
+**📂 RAG Ingestion & Document Format**
+
+Place structured, factual financial documents (.txt or .md) into the ./docs directory.
+File Naming Convention: Prefix files with ticker symbols for automatic metadata tagging (e.g., AAPL_Q3_2024.txt, NVDA_10K.txt).
+Ingestion Trigger: Navigate to the Document Ingestion tab in Streamlit and click Ingest Files, or send a POST request to /rag/ingest.
+
+**⚖️ Compliance & Redistribution Note**
+
+To adhere to terms of service regarding live financial web scraping, all ingested RAG text files utilize publicly disclosed SEC filings (10-K summaries) or original factual company descriptions rather than proprietary news content scraped directly from external sites. Real-time market prices and historical metrics are retrieved on-demand via the yfinance Python interface.
+
+**🧪 Testing**
+
+Automated API test coverage is built using pytest and httpx.AsyncClient.
+Run the test suite in separate terminal:
+pytest                               
