@@ -102,12 +102,12 @@
 
 1. **Clone the Repository**
    ```bash
-   git clone [https://github.com/your-username/fininsight-ai.git](https://github.com/your-username/fininsight-ai.git)
-   cd fininsight-ai
+   git clone https://github.com/your-username/Yahoo-Finance-AI-Dashboard.git
+   cd Yahoo-Finance-Dashboard
 
 2. **Create and Activate Conda Environment**
 Bash
-conda create -n fininsight python=3.10 -y
+conda create -n fininsight python=3.1l -y
 conda activate fininsight
 
 3. **Install Dependencies**
