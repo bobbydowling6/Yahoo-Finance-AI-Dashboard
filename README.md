@@ -36,15 +36,15 @@
 ### Database Models & Relationships (SQLAlchemy)
 
 ┌──────────────────┐               ┌───────────────────────┐
-    │      Users       │               │       Portfolio       │
-    ├──────────────────┤               ├───────────────────────┤
-    │ id (PK)          │ 1           * │ id (PK)               │
-    │ email (Unique)   ├───────────────┤ user_id (FK -> users) │
-    │ hashed_password  │  (1-to-Many)  │ ticker                │
-    │ created_at       │               │ shares_owned          │
-    └──────────────────┘               │ buy_price             │
-                                       │ created_at            │
-                                       └───────────────────────┘
+│      Users       │               │       Portfolio       │
+├──────────────────┤               ├───────────────────────┤
+│ id (PK)          │ 1           * │ id (PK)               │
+│ email (Unique)   ├───────────────┤ user_id (FK -> users) │
+│ hashed_password  │  (1-to-Many)  │ ticker                │
+│ created_at       │               │ shares_owned          │
+└──────────────────┘               │ buy_price             │
+                                   │ created_at            │
+                                   └───────────────────────┘
 
 * **User Model**: Stores unique user credentials with hashed passwords. Cascade deletion configured for associated portfolio items.
 * **Portfolio Model**: Tracks equity positions per user, including ticker, share quantity, and initial cost basis (`buy_price`).
@@ -59,18 +59,35 @@
 
 ## 🔌 API Endpoints Summary
 
+### 🔑 Authentication (`/auth`)
 | Method | Endpoint | Description | Auth Required |
 | :--- | :--- | :--- | :---: |
-| `POST` | `/auth/register` | Register a new user account | ❌ |
-| `POST` | `/auth/login` | Authenticate & obtain JWT Access Token | ❌ |
-| `POST` | `/portfolio/` | Add stock holding (ticker, shares, buy price) | ✅ |
-| `GET` | `/portfolio/` | Fetch user portfolio populated with live `yfinance` pricing | ✅ |
-| `DELETE` | `/portfolio/{portfolio_id}` | Remove position by ID | ✅ |
-| `GET` | `/stocks/{ticker}` | Retrieve fundamentals & historical chart data | ❌ |
-| `POST` | `/rag/ingest` | Ingest local `.txt`/`.md` documents into ChromaDB | ✅ |
-| `POST` | `/rag/query` | Vector search in ChromaDB + Google Gemini RAG generation | ✅ |
+| `POST` | `/auth/register` | Register a new user account with hashed password credentials | ❌ |
+| `POST` | `/auth/login` | Authenticate credentials and return a JWT Access Token | ❌ |
 
----
+### 💼 Investment Portfolio (`/portfolio`)
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :---: |
+| `GET` | `/portfolio/` | Fetch user portfolio populated with live `yfinance` pricing & return metrics | ✅ |
+| `POST` | `/portfolio/` | Add a stock position (`ticker`, `shares`, `buy_price`) to user portfolio | ✅ |
+| `DELETE` | `/portfolio/{portfolio_id}` | Remove a specific holding owned by the authenticated user | ✅ |
+
+### 📈 Market & Stock Data (`/stocks`)
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :---: |
+| `GET` | `/stocks/{ticker}` | Fetch real-time price, valuation metrics, and company profile via `yfinance` | ❌ |
+
+### 🤖 AI & RAG Pipeline (`/rag`)
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :---: |
+| `POST` | `/rag/ingest` | Chunk and index `.txt`/`.md` documents in `./docs` into ChromaDB | ✅ |
+| `POST` | `/rag/query` | Perform vector search in ChromaDB & generate answers via Google Gemini | ✅ |
+
+### 🏥 System Health & Monitoring
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :---: |
+| `GET` | `/health` | Application health check endpoint for container probes | ❌ |
+| `GET` | `/stats` | System status and vector store indexing statistics | ❌ |
 
 ## 🚀 Getting Started
 
@@ -132,5 +149,6 @@ To adhere to terms of service regarding live financial web scraping, all ingeste
 **🧪 Testing**
 
 Automated API test coverage is built using pytest and httpx.AsyncClient.
+
 Run the test suite in separate terminal:
 pytest                               
