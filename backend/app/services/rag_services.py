@@ -17,7 +17,7 @@ CHROMA_PATH = os.getenv("CHROMA_PATH", str(PROJECT_ROOT / "chroma_db"))
 MAX_RESULTS: int = int(os.environ.get("MAX_RESULTS", "3"))
 CONFIDENCE_THRESHOLD: float = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.5"))
 DEBUG: bool = os.environ.get("DEBUG", "false").lower() == "true"
-MODEL_NAME: str = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+MODEL_NAME: str = os.environ.get("GEMINI_MODEL", "gemini-3.7-flash")
 
 # Initialize persistent ChromaDB client
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
@@ -112,7 +112,7 @@ def ingest_documents_from_directory(target_dir: str = "docs") -> int:
 
 def generate_with_fallback(client: genai.Client, user_prompt: str, system_instruction: str) -> str:
     """Tries generating content with retries and fallback models on 503/server overload."""
-    models_to_try = [MODEL_NAME, "gemini-3.6-flash", "gemini-3.5-flash-lite"]
+    models_to_try = [MODEL_NAME, "gemini-3.7-flash", "gemini-3.5-flash-lite"]
     # De-duplicate model list while preserving order
     deduped_models = list(dict.fromkeys(models_to_try))
     max_retries = 3
